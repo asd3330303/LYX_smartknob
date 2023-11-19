@@ -1,5 +1,7 @@
+#include <fix_bug.h>
+
 #if SK_LEDS
-#include <FastLED.h>
+#include <LiteLED.h>
 #endif
 
 #if SK_STRAIN
@@ -13,10 +15,6 @@
 #include "interface_task.h"
 #include "semaphore_guard.h"
 #include "util.h"
-
-#if SK_LEDS
-CRGB leds[NUM_LEDS];
-#endif
 
 #if SK_STRAIN
 HX711 scale;
@@ -233,19 +231,24 @@ InterfaceTask::~InterfaceTask() {
     vSemaphoreDelete(mutex_);
 }
 
+#if SK_LEDS
+    LiteLED myLED( LED_STRIP_SK6812, LED_TYPE_IS_RGBW );    // create the LiteLED object; we're calling it "myLED"
+#endif
+
 void InterfaceTask::run() {
     stream_.begin();
     
-    #if SK_LEDS
-        FastLED.addLeds<SK6812, PIN_LED_DATA, GRB>(leds, NUM_LEDS);
-    #endif
+#if SK_LEDS
+    myLED.begin( PIN_LED_DATA, NUM_LEDS );         // initialze the myLED object. Here we have 1 LED attached to the LED_GPIO pin
+    myLED.fill(Red, 1 );    // set the LED colour and show it
+#endif
 
     #if SK_ALS && PIN_SDA >= 0 && PIN_SCL >= 0
         Wire.begin(PIN_SDA, PIN_SCL);
         Wire.setClock(400000);
     #endif
     #if SK_STRAIN
-        scale.begin(38, 2);
+        scale.begin(37, 38);
     #endif
 
     #if SK_ALS
@@ -363,6 +366,7 @@ void InterfaceTask::changeConfig(bool next) {
     motor_task_.setConfig(configs[current_config_]);
 }
 
+uint16_t rx_brightness;//环境光大小
 void InterfaceTask::updateHardware() {
     // How far button is pressed, in range [0, 1]
     float press_value_unit = 0;
@@ -384,12 +388,6 @@ void InterfaceTask::updateHardware() {
         if (scale.wait_ready_timeout(100)) {
             strain_reading_ = scale.read();
 
-            static uint32_t last_reading_display;
-            if (millis() - last_reading_display > 1000 && strain_calibration_step_ == 0) {
-                snprintf(buf_, sizeof(buf_), "HX711 reading: %d", strain_reading_);
-                log(buf_);
-                last_reading_display = millis();
-            }
             if (configuration_loaded_ && configuration_value_.has_strain && strain_calibration_step_ == 0) {
                 // TODO: calibrate and track (long term moving average) idle point (lower)
                 press_value_unit = lerp(strain_reading_, configuration_value_.strain.idle_value, configuration_value_.strain.idle_value + configuration_value_.strain.press_delta, 0, 1);
@@ -420,38 +418,44 @@ void InterfaceTask::updateHardware() {
             log("HX711 not found.");
 
             #if SK_LEDS
-                for (uint8_t i = 0; i < NUM_LEDS; i++) {
-                    leds[i] = CRGB::Red;
-                }
-                FastLED.show();
+                myLED.fill(Red, 1 );    // set the LED colour and show it
+                //未完成，搞成缓启动
+                myLED.brightness( 30, 1 );  // turn the LED on
             #endif
         }
     #endif
 
-    uint16_t brightness = UINT16_MAX;
+    
     // TODO: brightness scale factor should be configurable (depends on reflectivity of surface)
     #if SK_ALS
-        brightness = (uint16_t)CLAMP(lux_avg * 13000, (float)1280, (float)UINT16_MAX);
+        rx_brightness = (uint16_t)CLAMP(lux_avg * 13000, (float)1280, (float)UINT16_MAX);
     #endif
 
     #if SK_DISPLAY
-        display_task_->setBrightness(brightness); // TODO: apply gamma correction
+        display_task_->setBrightness(rx_brightness); // TODO: apply gamma correction
     #endif
 
     #if SK_LEDS
-        for (uint8_t i = 0; i < NUM_LEDS; i++) {
-            leds[i].setHSV(200 * CLAMP(press_value_unit, (float)0, (float)1), 255, brightness >> 8);
-
-            // Gamma adjustment
-            leds[i].r = dim8_video(leds[i].r);
-            leds[i].g = dim8_video(leds[i].g);
-            leds[i].b = dim8_video(leds[i].b);
-        }
-        FastLED.show();
+        uint8_t led_brightness = (rx_brightness >> 8) * CLAMP(press_value_unit, (float)0, (float)1);
+        myLED.brightness(led_brightness, 1 );  // turn the LED on
     #endif
+
+    static uint32_t last_reading_display;
+    if (millis() - last_reading_display > 1000 && strain_calibration_step_ == 0) {
+        snprintf(buf_, sizeof(buf_), "HX711 reading: %d", strain_reading_);
+        log(buf_);
+        snprintf(buf_, sizeof(buf_), "HX711 press_value_unit: %f", press_value_unit);
+        log(buf_);
+        snprintf(buf_, sizeof(buf_), "rx_brightness: %d", rx_brightness);
+        log(buf_);
+        snprintf(buf_, sizeof(buf_), "led_brightness: %d", led_brightness);
+        log(buf_);
+        last_reading_display = millis();
+    }
 }
 
 void InterfaceTask::setConfiguration(Configuration* configuration) {
     SemaphoreGuard lock(mutex_);
     configuration_ = configuration;
 }
+

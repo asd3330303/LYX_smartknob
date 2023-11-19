@@ -26,7 +26,7 @@ class DisplayTask : public Task<DisplayTask> {
 
     private:
         TFT_eSPI tft_ = TFT_eSPI();
-
+        TFT_eSprite img = TFT_eSprite(&tft_); 
         /** Full-size sprite used as a framebuffer */
         TFT_eSprite spr_ = TFT_eSprite(&tft_);
 

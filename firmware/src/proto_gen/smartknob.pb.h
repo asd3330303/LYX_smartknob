@@ -45,6 +45,7 @@ typedef struct _PB_SmartKnobState {
     float sub_position_unit;
     bool has_config;
     PB_SmartKnobConfig config;
+    uint8_t new_flag;
 } PB_SmartKnobState;
 
 /* Message FROM the SmartKnob to the host */

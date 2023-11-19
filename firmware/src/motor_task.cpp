@@ -8,6 +8,7 @@
 #elif SENSOR_MAQ430
 #include "maq430_sensor.h"
 #endif
+#include "Sensor.h"
 
 #include "motors/motor_config.h"
 #include "util.h"
@@ -37,7 +38,7 @@ MotorTask::~MotorTask() {}
 #elif SENSOR_MAQ430
     MagneticSensorSPI encoder = MagneticSensorSPI(MAQ430_SPI, PIN_MAQ_SS);
 #endif
-
+extern PB_SmartKnobState g_dis_state;
 void MotorTask::run() {
 
     driver.voltage_power_supply = 5;
@@ -79,7 +80,8 @@ void MotorTask::run() {
 
     PB_PersistentConfiguration c = configuration_.get();
     motor.pole_pairs = c.motor.calibrated ? c.motor.pole_pairs : 7;
-    motor.initFOC(c.motor.zero_electrical_offset, c.motor.direction_cw ? Direction::CW : Direction::CCW);
+    // motor.initFOC(c.motor.zero_electrical_offset, c.motor.direction_cw ? Direction::CW : Direction::CCW);
+    motor.initFOC();
 
     motor.monitor_downsample = 0; // disable monitor at first - optional
 
@@ -286,12 +288,18 @@ void MotorTask::run() {
 
         // Publish current status to other registered tasks periodically
         if (millis() - last_publish > 5) {
-            publish({
-                .current_position = current_position,
-                .sub_position_unit = latest_sub_position_unit,
-                .has_config = true,
-                .config = config,
-            });
+            // publish({
+            //     .current_position = current_position,
+            //     .sub_position_unit = latest_sub_position_unit,
+            //     .has_config = true,
+            //     .config = config,
+            // });
+            g_dis_state.current_position = current_position;
+            g_dis_state.sub_position_unit = latest_sub_position_unit;
+            g_dis_state.has_config = true;
+            memcpy(&g_dis_state.config, &config, sizeof(config));
+            g_dis_state.new_flag = 1;
+
             last_publish = millis();
         }
 
@@ -356,7 +364,8 @@ void MotorTask::calibrate() {
 
     motor.controller = MotionControlType::angle_openloop;
     motor.pole_pairs = 1;
-    motor.initFOC(0, Direction::CW);
+    // motor.initFOC(0, Direction::CW);
+    // motor.initFOC();
 
     float a = 0;
 
@@ -399,10 +408,12 @@ void MotorTask::calibrate() {
     log("Sensor measures positive for positive motor rotation:");
     if (end_sensor > start_sensor) {
         log("YES, Direction=CW");
-        motor.initFOC(0, Direction::CW);
+        // motor.initFOC(0, Direction::CW);
+        // motor.initFOC();
     } else {
         log("NO, Direction=CCW");
-        motor.initFOC(0, Direction::CCW);
+        // motor.initFOC(0, Direction::CCW);
+        // motor.initFOC();
     }
     snprintf(buf_, sizeof(buf_), "  (start was %.1f, end was %.1f)", start_sensor, end_sensor);
     log(buf_);

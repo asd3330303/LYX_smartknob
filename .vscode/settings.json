@@ -11,6 +11,18 @@
     "editor.formatOnSaveMode": "file",
     "files.associations": {
         "cstddef": "cpp",
-        "limits": "cpp"
+        "limits": "cpp",
+        "*.tcc": "cpp",
+        "istream": "cpp",
+        "ostream": "cpp",
+        "typeinfo": "cpp",
+        "array": "cpp",
+        "deque": "cpp",
+        "string": "cpp",
+        "unordered_map": "cpp",
+        "unordered_set": "cpp",
+        "vector": "cpp",
+        "string_view": "cpp",
+        "initializer_list": "cpp"
     },
 }
